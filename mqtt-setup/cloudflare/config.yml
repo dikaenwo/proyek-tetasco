@@ -1,0 +1,21 @@
+tunnel: GANTI_DENGAN_TUNNEL_ID_ANDA
+credentials-file: /home/telur/.cloudflared/GANTI_DENGAN_TUNNEL_ID_ANDA.json
+
+ingress:
+  # ─── REST API & Dashboard Web ───────────────────────────────────────────────
+  - hostname: api.tetasco.my.id
+    service: http://localhost:80
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+
+  # ─── MQTT over WebSocket ─────────────────────────────────────────────────────
+  # Raspi Lemari connect ke: wss://mqtt.tetasco.my.id/mqtt
+  - hostname: mqtt.tetasco.my.id
+    service: http://localhost:9001
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+
+  # ─── Catch-all (wajib ada di akhir) ─────────────────────────────────────────
+  - service: http_status:404

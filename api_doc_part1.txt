@@ -1,0 +1,211 @@
+﻿DOKUMENTASI API
+Versi 1.1.0 ΓÇö Dokumentasi Implementasi Terbaru
+Dokumentasi kondisi API Tetasco Connect setelah integrasi FastAPI, PostgreSQL, kontrol perangkat Raspberry Pi GPIO, dan penyimpanan histori sensor berbasis timestamp.
+1. Arsitektur Sistem
+Raspberry Pi menjalankan Docker Compose. Nginx melayani frontend dan reverse proxy FastAPI, PostgreSQL menyimpan data, dan Hardware API menangani GPIO.
+Internet/Client ΓåÆ Nginx :80
+Nginx ΓåÆ frontend static files
+Nginx /api/ ΓåÆ FastAPI :8000
+FastAPI ΓåÆ PostgreSQL melalui database:5432
+FastAPI ΓåÆ Hardware API melalui host.docker.internal:5001
+Hardware API ΓåÆ GPIO Raspberry Pi
+2. Struktur Project
+/home/telur/tetasco-connect/
+3. Komponen Utama
+Komponen
+Port
+Fungsi
+Nginx
+80
+Frontend dan reverse proxy API
+FastAPI
+8000
+API aplikasi, database, dan kontrol perangkat
+PostgreSQL
+5432 internal
+Penyimpanan user, Tetasco, dan histori sensor
+Hardware API
+5001
+Kontrol dan status GPIO Raspberry Pi
+4. Database
+Tabel
+Kolom utama
+Keterangan
+users
+id, name, email, created_at
+Data user
+tetasco
+id, user_id, name, status, created_at
+Perangkat Tetasco milik user
+sensor_history
+id, tetasco_id, temperature, humidity, recorded_at
+Histori pembacaan sensor
+sensor_history.recorded_at menggunakan DEFAULT CURRENT_TIMESTAMP. Setiap data yang disimpan memperoleh waktu pencatatan otomatis. Tidak digunakan scheduler atau otomatisasi pencatatan.
+5. Relasi Data
+users.id ΓåÆ tetasco.user_id ΓåÆ sensor_history.tetasco_id
+Foreign key menggunakan ON DELETE CASCADE pada relasi user ΓåÆ Tetasco dan Tetasco ΓåÆ sensor history.
+6. Endpoint Dasar
+Method & Endpoint
+Fungsi
+GET /
+Informasi dasar API
+GET /api/health
+Health check FastAPI
+GET /api/database/health
+Pemeriksaan koneksi PostgreSQL
+GET /api/tetasco
+Daftar Tetasco beserta user
+GET /api/tetasco/{id}
+Detail Tetasco dan user
+7. Sensor & History
+Method
+Endpoint
+Fungsi
+GET
+/api/tetasco/{id}/sensors
+Sensor terbaru yang tersimpan
+POST
+/api/tetasco/{id}/sensors/history
+Menyimpan suhu/kelembaban; timestamp otomatis
+GET
+/api/tetasco/{id}/sensors/history
+Mengambil histori sensor
+GET
+/api/tetasco/{id}/sensors/read
+Membaca Hardware API lalu menyimpan hasil
+Contoh request:
+POST /api/tetasco/1/sensors/history
+Contoh response:
+{
+8. Konsep Penyimpanan Sensor
+Setiap pembacaan yang dikirim disimpan sebagai satu record. Tidak ada pembatasan satu record per jam dan tidak ada scheduler/cron. Timestamp dicatat oleh PostgreSQL saat record dibuat.
+Endpoint history/hourly pernah diuji untuk agregasi, tetapi bukan bagian dari mekanisme penyimpanan utama.
+9. Perangkat & GPIO
+Perangkat
+Status API
+GPIO
+Keterangan
+Heater 1
+ON/OFF
+GPIO 26
+Relay fisik, telah diuji
+Heater 2
+ON/OFF
+Belum ditentukan
+Logical state; belum terhubung GPIO
+Fan
+ON/OFF
+GPIO 4
+Relay fisik
+Humidifier
+ON/OFF
+GPIO 22
+Relay fisik
+Motor
+ON/OFF
+GPIO 13
+Relay fisik
+UV
+ON/OFF
+Belum ditentukan
+Logical state; belum terhubung GPIO
+10. Endpoint Kontrol Perangkat
+Method
+Endpoint
+Keterangan
+POST
+/api/tetasco/{id}/devices/fan/{on|off}
+Fan
+POST
+/api/tetasco/{id}/devices/heater-1/{on|off}
+Heater 1
+POST
+/api/tetasco/{id}/devices/heater-2/{on|off}
+Logical Heater 2
+POST
+/api/tetasco/{id}/devices/heater/{on|off}
+Endpoint legacy Heater 1
+POST
+/api/tetasco/{id}/devices/humidifier/{on|off}
+Humidifier
+POST
+/api/tetasco/{id}/devices/motor/{on|off}
+Motor
+POST
+/api/tetasco/{id}/devices/uv/{on|off}
+Logical UV
+GET
+/api/tetasco/{id}/devices
+Status logical semua perangkat
+GET
+/api/tetasco/{id}/hardware
+Status hardware GPIO
+11. Contoh Status Perangkat
+{
+12. Hardware API
+Hardware API berjalan pada port 5001 dan sebaiknya tidak diekspos langsung ke internet.
+GET /api/sensor ΓÇö membaca temperature dan humidity
+GET /api/actuators ΓÇö status actuator
+POST /api/fan/on|off
+POST /api/relay/on|off ΓÇö Heater 1
+POST /api/humidifier/on|off
+POST /api/motor/on|off
+13. Nginx
+Nginx mendengarkan port 80 dan menggunakan reverse proxy:
+location / ΓåÆ /usr/share/nginx/html
+14. Docker Compose
+Service utama: backend, database, dan nginx. PostgreSQL menggunakan named volume postgres_data. Backend menggunakan DATABASE_URL menuju service database pada port 5432.
+15. Pengujian Berhasil
+FastAPI health check
+FastAPI ΓåÆ PostgreSQL
+User ID dan relasi User ΓåÆ Tetasco
+Penyimpanan sensor history
+Pembacaan sensor dari Hardware API
+History sensor dengan timestamp
+Heater 1 melalui GPIO 26
+Heater 2 sebagai logical state
+Fan, Humidifier, dan Motor
+UV sebagai logical state
+Nginx dan Docker Compose
+Seluruh perangkat dikembalikan OFF setelah pengujian
+16. Swagger / OpenAPI
+Dokumentasi interaktif tersedia di /docs dan OpenAPI JSON di /openapi.json. Akses lokal: http://localhost/docs dan http://localhost/openapi.json.
+17. Keamanan & Catatan
+Port hardware API 5001 sebaiknya hanya internal.
+Password PostgreSQL tidak boleh dimasukkan ke dokumentasi publik.
+Endpoint kontrol perangkat belum menggunakan autentikasi/otorisasi.
+Heater 2 dan UV belum memiliki mapping GPIO.
+Penyimpanan sensor tidak menggunakan scheduler; data tersimpan ketika endpoint menerima pembacaan.
+Timestamp berasal dari PostgreSQL CURRENT_TIMESTAMP.
+18. Status Implementasi
+Fitur
+Status
+FastAPI
+Selesai
+PostgreSQL
+Selesai
+User ID / relasi User-Tetasco
+Selesai
+Sensor history + timestamp
+Selesai
+Pembacaan sensor Hardware API
+Selesai
+Heater 1 / GPIO 26
+Selesai
+Heater 2
+Logical state; GPIO belum ditentukan
+Fan / GPIO 4
+Selesai
+Humidifier / GPIO 22
+Selesai
+Motor / GPIO 13
+Selesai
+UV
+Logical state; GPIO belum ditentukan
+Nginx reverse proxy
+Selesai
+Docker Compose
+Selesai
+Authentication
+Belum diimplementasikan
+Tetasco Connect ΓÇö Dokumentasi API Terbaru

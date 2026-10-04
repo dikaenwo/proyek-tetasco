@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetasco Connect — Selamat Datang</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-900: #0D1F0F;
+      --green-800: #1A3A1E;
+      --green-700: #1E4A2A;
+      --green-600: #2F6B3F;
+      --green-500: #3D8A52;
+      --green-400: #52C97F;
+      --green-300: #7DDFA0;
+      --white:     #FFFFFF;
+      --gray:      rgba(255,255,255,0.55);
+      --gray-dim:  rgba(255,255,255,0.2);
+    }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--green-900);
+      color: var(--white);
+      overflow: hidden;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      cursor: none;
+    }
+
+    /* ── Background animated blobs ─────────────────────── */
+    .bg-blob {
+      position: fixed; border-radius: 50%;
+      filter: blur(80px); pointer-events: none; z-index: 0;
+    }
+    .blob1 { width: 420px; height: 420px; background: rgba(47,107,63,0.25); top: -80px; right: -80px; animation: float1 8s ease-in-out infinite; }
+    .blob2 { width: 300px; height: 300px; background: rgba(61,138,82,0.15); bottom: -60px; left: -60px; animation: float2 10s ease-in-out infinite; }
+    .blob3 { width: 200px; height: 200px; background: rgba(82,201,127,0.1); top: 40%; left: 30%; animation: float3 12s ease-in-out infinite; }
+
+    @keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-30px,20px) scale(1.05); } }
+    @keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(20px,-30px) scale(1.08); } }
+    @keyframes float3 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(15px,25px); } }
+
+    /* ── Screen management ─────────────────────────────── */
+    .screen {
+      position: fixed; inset: 0; z-index: 1;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .screen.hidden { opacity: 0; pointer-events: none; transform: scale(0.96); }
+
+    /* ── Welcome screen ────────────────────────────────── */
+    #welcome {
+      gap: 0;
+      background: transparent;
+    }
+
+    .logo-ring {
+      position: relative;
+      width: 140px; height: 140px;
+      margin-bottom: 32px;
+    }
+    .logo-ring svg.spin {
+      position: absolute; inset: 0;
+      animation: spinRing 12s linear infinite;
+    }
+    .logo-ring svg.spin.rev {
+      animation: spinRing 8s linear infinite reverse;
+    }
+    @keyframes spinRing { to { transform: rotate(360deg); } }
+    .logo-center {
+      position: absolute; inset: 16px;
+      background: linear-gradient(135deg, var(--green-700), var(--green-600));
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 40px rgba(47,107,63,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    .welcome-title {
+      font-size: 42px; font-weight: 900; letter-spacing: -1.5px;
+      line-height: 1.05; text-align: center;
+      background: linear-gradient(135deg, #FFFFFF 0%, var(--green-300) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+      animation: fadeUp 0.8s ease 0.3s both;
+    }
+    .welcome-sub {
+      font-size: 17px; font-weight: 400; color: var(--gray);
+      text-align: center; max-width: 360px; line-height: 1.6;
+      animation: fadeUp 0.8s ease 0.5s both;
+      margin-bottom: 48px;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .tap-btn {
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      padding: 18px 40px;
+      background: linear-gradient(135deg, var(--green-500), var(--green-600));
+      border: none; border-radius: 100px; cursor: pointer;
+      font-family: inherit; font-size: 17px; font-weight: 700; color: #FFF;
+      box-shadow: 0 8px 32px rgba(47,107,63,0.4), 0 0 0 0 rgba(82,201,127,0.5);
+      animation: pulse-ring 2.5s ease-in-out infinite 1s, fadeUp 0.8s ease 0.7s both;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .tap-btn:active { transform: scale(0.96); }
+    @keyframes pulse-ring {
+      0%   { box-shadow: 0 8px 32px rgba(47,107,63,0.4), 0 0 0 0 rgba(82,201,127,0.4); }
+      70%  { box-shadow: 0 8px 32px rgba(47,107,63,0.4), 0 0 0 24px rgba(82,201,127,0); }
+      100% { box-shadow: 0 8px 32px rgba(47,107,63,0.4), 0 0 0 0 rgba(82,201,127,0); }
+    }
+
+    /* Status pills */
+    .status-row {
+      display: flex; gap: 12px; margin-top: 28px;
+      animation: fadeUp 0.8s ease 0.9s both;
+    }
+    .pill {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 100px;
+      background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1);
+      font-size: 12px; font-weight: 500; color: var(--gray);
+    }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; }
+    .dot-green { background: var(--green-400); animation: blink 2s infinite; }
+    .dot-yellow { background: #F59E0B; }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    /* ── QR screen ─────────────────────────────────────── */
+    #qr-screen {
+      flex-direction: row;
+      padding: 40px;
+      gap: 48px;
+      background: transparent;
+    }
+
+    /* Left panel */
+    .qr-left {
+      flex: 1; display: flex; flex-direction: column; justify-content: center;
+      animation: slideLeft 0.5s ease both;
+    }
+    @keyframes slideLeft { from { opacity:0; transform: translateX(-30px); } to { opacity:1; transform: translateX(0); } }
+
+    .qr-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 100px; margin-bottom: 20px;
+      background: rgba(82,201,127,0.12); border: 1px solid rgba(82,201,127,0.25);
+      font-size: 11px; font-weight: 700; color: var(--green-400); letter-spacing: 1px;
+    }
+    .qr-title {
+      font-size: 38px; font-weight: 800; letter-spacing: -1px; line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .qr-title span { color: var(--green-400); }
+    .qr-desc { font-size: 15px; color: var(--gray); line-height: 1.7; margin-bottom: 28px; }
+
+    .steps { display: flex; flex-direction: column; gap: 12px; }
+    .step {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-radius: 14px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+    }
+    .step-num {
+      width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+      background: var(--green-700); display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; color: var(--green-400);
+    }
+    .step-text { font-size: 13px; color: rgba(255,255,255,0.75); }
+    .step-text b { color: #FFF; }
+
+    /* Right panel — QR */
+    .qr-right {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; animation: slideRight 0.5s ease both;
+    }
+    @keyframes slideRight { from { opacity:0; transform: translateX(30px); } to { opacity:1; transform: translateX(0); } }
+
+    .qr-card {
+      background: #FFFFFF; border-radius: 28px;
+      padding: 20px; position: relative;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.1);
+    }
+    .qr-card::before {
+      content: ''; position: absolute; inset: -1px; border-radius: 29px;
+      background: linear-gradient(135deg, rgba(82,201,127,0.3), transparent 60%);
+      z-index: -1;
+    }
+    #qr-canvas { display: block; }
+
+    .qr-label {
+      text-align: center;
+    }
+    .qr-label .device-name { font-size: 16px; font-weight: 700; color: #FFF; }
+    .qr-label .token-code {
+      font-size: 28px; font-weight: 900; letter-spacing: 8px; color: var(--green-400);
+      font-family: 'Courier New', monospace; margin-top: 2px;
+    }
+    .qr-label .token-hint { font-size: 11px; color: var(--gray-dim); margin-top: 4px; }
+
+    .timer-bar-wrap {
+      width: 100%; background: rgba(255,255,255,0.08); border-radius: 4px; height: 3px; overflow: hidden;
+    }
+    .timer-bar { height: 100%; background: var(--green-400); width: 100%; transition: width 1s linear; }
+
+    /* Back btn */
+    .back-btn {
+      position: fixed; top: 24px; left: 24px; z-index: 10;
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 100px;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      font-family: inherit; font-size: 12px; color: var(--gray);
+      cursor: pointer;
+    }
+
+    /* Loading */
+    .loading-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+    }
+    .spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid rgba(82,201,127,0.15);
+      border-top-color: var(--green-400);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Success */
+    #success-screen { gap: 20px; }
+    .success-ring {
+      width: 110px; height: 110px; border-radius: 50%;
+      background: rgba(82,201,127,0.1); border: 2px solid rgba(82,201,127,0.3);
+      display: flex; align-items: center; justify-content: center;
+      animation: popIn 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes popIn { from { opacity:0; transform:scale(0.5); } to { opacity:1; transform:scale(1); } }
+    .success-title { font-size: 32px; font-weight: 800; text-align: center; }
+    .success-sub { font-size: 16px; color: var(--gray); text-align: center; max-width: 340px; line-height: 1.6; }
+    .redirect-bar {
+      width: 200px; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;
+    }
+    .redirect-fill { height: 100%; background: var(--green-400); animation: fill3s 4s linear forwards; }
+    @keyframes fill3s { from {width:0} to {width:100%} }
+
+    /* Device info bar */
+    .device-bar {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 24px;
+      background: rgba(0,0,0,0.3); backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: rgba(255,255,255,0.3);
+    }
+  </style>
+</head>
+<body>
+
+<!-- Background -->
+<div class="bg-blob blob1"></div>
+<div class="bg-blob blob2"></div>
+<div class="bg-blob blob3"></div>
+
+<!-- ── SCREEN 1: Welcome ─────────────────────────────── -->
+<div class="screen" id="welcome">
+  <!-- Logo ring -->
+  <div class="logo-ring">
+    <!-- Outer rotating ring -->
+    <svg class="spin" viewBox="0 0 140 140" fill="none">
+      <circle cx="70" cy="70" r="66" stroke="rgba(82,201,127,0.15)" stroke-width="1.5" stroke-dasharray="4 8"/>
+    </svg>
+    <!-- Inner counter-rotating ring -->
+    <svg class="spin rev" viewBox="0 0 140 140" fill="none" style="inset:10px">
+      <circle cx="60" cy="60" r="56" stroke="rgba(82,201,127,0.25)" stroke-width="1.5" stroke-dasharray="2 12"/>
+    </svg>
+    <!-- Center icon -->
+    <div class="logo-center">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none">
+        <!-- Egg icon -->
+        <ellipse cx="26" cy="30" rx="13" ry="17" stroke="#52C97F" stroke-width="2.5"/>
+        <path d="M20 22c1-6 3-12 6-16 3 4 5 10 6 16" stroke="#52C97F" stroke-width="2" stroke-linecap="round"/>
+        <!-- WiFi signal -->
+        <path d="M12 12C16 8 21 6 26 6s10 2 14 6" stroke="rgba(82,201,127,0.4)" stroke-width="2" stroke-linecap="round"/>
+        <path d="M16 16c2.7-2.7 6-4 10-4s7.3 1.3 10 4" stroke="rgba(82,201,127,0.6)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </div>
+
+  <h1 class="welcome-title">Selamat Datang<br/>di Tetasco Connect</h1>
+  <p class="welcome-sub">
+    Sistem penetas telur cerdas berbasis IoT.<br/>
+    Hubungkan lemari ke smartphone Anda dalam hitungan detik.
+  </p>
+
+  <button class="tap-btn" onclick="goToQR()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+      <rect x="3" y="3" width="7" height="7" rx="1"/>
+      <rect x="14" y="3" width="7" height="7" rx="1"/>
+      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <path d="M14 14h.01M18 14h.01M14 18h.01M18 18h.01M16 16v.01"/>
+    </svg>
+    Mulai Hubungkan ke HP
+  </button>
+
+  <div class="status-row" id="status-row">
+    <div class="pill">
+      <div class="pill-dot dot-green"></div>
+      <span id="mqtt-status">Menghubungi server...</span>
+    </div>
+    <div class="pill">
+      <div class="pill-dot dot-yellow" id="sensor-dot"></div>
+      <span id="sensor-status">Sensor SHT20</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCREEN 2: QR Code ─────────────────────────────── -->
+<div class="screen hidden" id="qr-screen">
+  <button class="back-btn" onclick="goToWelcome()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+    Kembali
+  </button>
+
+  <!-- Left -->
+  <div class="qr-left">
+    <div class="qr-badge">
+      <div class="pill-dot dot-green"></div>
+      SIAP DIPASANGKAN
+    </div>
+    <h2 class="qr-title">Scan QR ini<br/>dengan <span>TernakTelur</span></h2>
+    <p class="qr-desc">Buka aplikasi TernakTelur di smartphone Anda, pilih <b>"Tambah Lemari"</b> lalu arahkan kamera ke QR Code di sebelah kanan.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Buka app <b>TernakTelur</b> di HP Android</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Ketuk <b>"Tambah Lemari"</b> → <b>"Scan QR"</b></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Arahkan kamera ke QR code →</div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Beri nama lemari & pilih jenis telur di HP</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: QR -->
+  <div class="qr-right">
+    <div class="qr-card">
+      <div id="qr-loading" class="loading-wrap" style="width:220px;height:220px;display:flex">
+        <div class="spinner"></div>
+        <span style="font-size:13px;color:#666">Membuat QR...</span>
+      </div>
+      <canvas id="qr-canvas" style="display:none;border-radius:8px"></canvas>
+    </div>
+
+    <div class="qr-label">
+      <div class="device-name" id="device-name-label">Lemari #<span id="device-id-label">?</span></div>
+      <div class="token-code" id="token-label">--------</div>
+      <div class="token-hint">Kode klaim manual (jika scan gagal)</div>
+    </div>
+
+    <!-- Refresh countdown -->
+    <div style="width:220px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:10px;color:rgba(255,255,255,0.3)">Refresh QR</span>
+        <span style="font-size:10px;color:rgba(255,255,255,0.3)" id="timer-txt">60s</span>
+      </div>
+      <div class="timer-bar-wrap"><div class="timer-bar" id="timer-bar"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCREEN 3: Success ─────────────────────────────── -->
+<div class="screen hidden" id="success-screen">
+  <div class="success-ring">
+    <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#52C97F" stroke-width="2.5" stroke-linecap="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  </div>
+  <h2 class="success-title">Berhasil Terhubung! 🎉</h2>
+  <p class="success-sub" id="success-msg">Lemari Anda sekarang terhubung ke aplikasi TernakTelur.</p>
+  <div class="redirect-bar"><div class="redirect-fill"></div></div>
+  <p style="font-size:12px;color:rgba(255,255,255,0.3)">Memuat dashboard...</p>
+</div>
+
+<!-- Device info bar -->
+<div class="device-bar">
+  <span id="bar-device">Memuat info perangkat...</span>
+  <span id="bar-time"></span>
+  <span id="bar-temp">--°C · --%</span>
+</div>
+
+<script>
+// ── Config ─────────────────────────────────────────────
+const CENTRAL_API = 'https://tetasco.my.id';
+const LOCAL_API   = window.location.origin;  // http://127.0.0.1:5001
+let tetascoId     = 1;  // Will be fetched from backend
+let claimToken    = '';
+let timerInterval = null;
+let timerSec      = 60;
+let pollInterval  = null;
+
+// ── Init ────────────────────────────────────────────────
+async function init() {
+  // Get device info from local backend
+  try {
+    const res  = await fetch(`${LOCAL_API}/api/pairing-info`);
+    if (res.ok) {
+      const d   = await res.json();
+      tetascoId = d.tetasco_id || 1;
+      document.getElementById('device-id-label').textContent = tetascoId;
+      document.getElementById('bar-device').textContent = `lemari-${tetascoId}  ·  IP: ${d.ip || '...'}`;
+
+      // Jika sudah claimed, langsung redirect ke dashboard
+      if (d.claimed) {
+        console.log('[Pairing] Sudah diklaim, redirect ke /');
+        window.location.replace('/');
+        return;
+      }
+
+      if (d.online) {
+        document.getElementById('mqtt-status').textContent = 'Terhubung ke server';
+      } else {
+        document.getElementById('mqtt-status').textContent = 'Mode offline';
+      }
+
+      if (d.temperature !== null && d.temperature !== undefined) {
+        document.getElementById('sensor-dot').style.background = '#52C97F';
+        document.getElementById('sensor-status').textContent = `SHT20 · ${d.temperature}°C`;
+        document.getElementById('bar-temp').textContent = `${d.temperature}°C · ${d.humidity}%`;
+      }
+    }
+  } catch(e) {
+    console.log('Local API error:', e);
+  }
+
+  // Update clock + sensor setiap 10 detik
+  setInterval(() => {
+    document.getElementById('bar-time').textContent =
+      new Date().toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }, 1000);
+
+  setInterval(async () => {
+    try {
+      const r = await fetch(`${LOCAL_API}/api/sensor`);
+      if (r.ok) {
+        const s = await r.json();
+        if (s.temperature) {
+          document.getElementById('bar-temp').textContent = `${s.temperature}°C · ${s.humidity}%`;
+          document.getElementById('sensor-status').textContent = `SHT20 · ${s.temperature}°C`;
+          document.getElementById('sensor-dot').style.background = '#52C97F';
+        }
+      }
+    } catch { /* silent */ }
+  }, 10000);
+}
+
+// ── Navigate ────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+
+async function goToQR() {
+  showScreen('qr-screen');
+  await loadQR();
+  startTimer();
+  startPollClaimed();
+}
+
+function goToWelcome() {
+  clearInterval(timerInterval);
+  clearInterval(pollInterval);
+  showScreen('welcome');
+}
+
+// ── Load QR ─────────────────────────────────────────────
+async function loadQR() {
+  // Show loading
+  document.getElementById('qr-loading').style.display = 'flex';
+  document.getElementById('qr-canvas').style.display  = 'none';
+  document.getElementById('token-label').textContent  = '--------';
+
+  try {
+    const res = await fetch(`${CENTRAL_API}/api/tetasco/${tetascoId}/claim-token`);
+    const d   = await res.json();
+    claimToken = d.token;
+    const qrData = d.qrData;
+
+    document.getElementById('token-label').textContent = claimToken;
+
+    // Generate QR code
+    const canvas = document.getElementById('qr-canvas');
+    await QRCode.toCanvas(canvas, qrData, {
+      width: 220,
+      margin: 1,
+      color: { dark: '#1A2B1C', light: '#FFFFFF' },
+      errorCorrectionLevel: 'M',
+    });
+    document.getElementById('qr-loading').style.display = 'none';
+    canvas.style.display = 'block';
+  } catch(e) {
+    document.getElementById('token-label').textContent = 'Gagal';
+    document.getElementById('qr-loading').innerHTML = '<p style="color:#f88;font-size:13px;text-align:center">Tidak bisa terhubung ke server.<br/>Periksa koneksi internet.</p>';
+  }
+}
+
+// ── Countdown timer ──────────────────────────────────────
+function startTimer() {
+  timerSec = 60;
+  clearInterval(timerInterval);
+  updateTimerUI();
+  timerInterval = setInterval(() => {
+    timerSec--;
+    updateTimerUI();
+    if (timerSec <= 0) {
+      clearInterval(timerInterval);
+      loadQR();
+      startTimer();
+    }
+  }, 1000);
+}
+
+function updateTimerUI() {
+  document.getElementById('timer-txt').textContent = `${timerSec}s`;
+  document.getElementById('timer-bar').style.width = `${(timerSec / 60) * 100}%`;
+}
+
+// ── Poll claim status ────────────────────────────────────
+function startPollClaimed() {
+  clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    try {
+      const res = await fetch(`${LOCAL_API}/api/claim-status`);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.claimed) {
+          clearInterval(pollInterval);
+          clearInterval(timerInterval);
+          showSuccess(d.farm_name || 'Lemari Anda');
+        }
+      }
+    } catch { /* silent */ }
+  }, 3000);
+}
+
+// ── Show success ─────────────────────────────────────────
+function showSuccess(farmName) {
+  document.getElementById('success-msg').textContent =
+    `"${farmName}" sekarang terhubung ke aplikasi TernakTelur. Dashboard akan tampil sebentar lagi.`;
+  showScreen('success-screen');
+  setTimeout(() => {
+    window.location.href = '/';
+  }, 4200);
+}
+
+// ── Boot ─────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

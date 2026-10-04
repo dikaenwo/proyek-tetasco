@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tetasco Connect — Penetas Telur Cerdas Berbasis IoT</title>
+  <meta name="description" content="Tetasco Connect: Aplikasi penetas telur cerdas berbasis IoT. Monitor suhu, kelembaban, kontrol relay dari mana saja." />
+  <link rel="icon" type="image/png" href="assets/logo-tetasco.png" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@700;800;900&display=swap" rel="stylesheet" />
+
+  <!-- Three.js + GSAP CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+
+  <style>
+    /* ═══ RESET ═══ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #F5F7F5;
+      color: #1A2B1C;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; display: block; }
+    a { text-decoration: none; color: inherit; }
+
+    /* ═══ 3D CANVAS ═══ */
+    #canvas3d {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ═══ SCROLL CONTAINER ═══ */
+    .scroll-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ═══ NAVBAR ═══ */
+    .navbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      padding: 18px 0;
+      transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+    }
+    .navbar.scrolled {
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(24px) saturate(180%);
+      border-bottom: 1px solid rgba(47,107,63,0.1);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+      padding: 12px 0;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo { display: flex; align-items: center; gap: 10px; }
+    .nav-logo img { width: 34px; height: 34px; object-fit: contain; }
+    .nav-logo span { font-weight: 700; font-size: 1rem; color: #1A2B1C; letter-spacing: -0.3px; }
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a { font-size: 0.875rem; font-weight: 500; color: #5A6B5C; transition: color 0.3s; }
+    .nav-links a:hover { color: #2F6B3F; }
+    .nav-cta {
+      padding: 10px 24px; border-radius: 999px; font-size: 0.8125rem; font-weight: 600;
+      background: linear-gradient(135deg, #2F6B3F, #3D8A52);
+      color: #fff; border: none; cursor: pointer;
+      box-shadow: 0 4px 20px rgba(47,107,63,0.3);
+      transition: all 0.3s;
+    }
+    .nav-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(47,107,63,0.4); }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+    }
+
+    /* ═══ HERO ═══ */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center;
+      position: relative;
+      overflow: hidden;
+      padding: 120px 0 80px;
+      background: linear-gradient(160deg, #EBF5EE 0%, #F5F7F5 50%, #EEF7F0 100%);
+    }
+
+    /* Parallax layers */
+    .parallax-bg {
+      position: absolute; inset: 0; z-index: -1;
+    }
+    .parallax-layer {
+      position: absolute;
+      will-change: transform;
+    }
+    .pl-glow-1 {
+      width: 800px; height: 800px;
+      background: radial-gradient(circle, rgba(47,107,63,0.12) 0%, transparent 70%);
+      top: -200px; right: -200px;
+      border-radius: 50%;
+      filter: blur(80px);
+    }
+    .pl-glow-2 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(82,201,127,0.10) 0%, transparent 70%);
+      bottom: -100px; left: -100px;
+      border-radius: 50%;
+      filter: blur(60px);
+    }
+    .pl-grid {
+      inset: 0; width: 100%; height: 100%;
+      background-image:
+        linear-gradient(rgba(47,107,63,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(47,107,63,0.06) 1px, transparent 1px);
+      background-size: 60px 60px;
+      mask-image: radial-gradient(ellipse at 40% 50%, black 20%, transparent 70%);
+    }
+
+    .hero-inner {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 64px;
+      align-items: center;
+    }
+
+    .hero-tag {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 18px; border-radius: 999px;
+      background: rgba(47,107,63,0.08);
+      border: 1px solid rgba(47,107,63,0.2);
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.8px;
+      color: #2F6B3F;
+      margin-bottom: 28px;
+    }
+    .hero-tag .pulse {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #52C97F;
+      box-shadow: 0 0 0 0 rgba(82,201,127,0.5);
+      animation: livePulse 2s infinite;
+    }
+    @keyframes livePulse {
+      0% { box-shadow: 0 0 0 0 rgba(82,201,127,0.5); }
+      70% { box-shadow: 0 0 0 12px rgba(82,201,127,0); }
+      100% { box-shadow: 0 0 0 0 rgba(82,201,127,0); }
+    }
+
+    .hero-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: clamp(2.5rem, 5.5vw, 4.5rem);
+      font-weight: 900;
+      color: #1A2B1C;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      margin-bottom: 28px;
+    }
+    .hero-title .line { display: block; overflow: hidden; }
+    .hero-title .word {
+      display: inline-block;
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    .hero-title .accent {
+      background: linear-gradient(135deg, #2F6B3F, #52C97F, #3D8A52);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmerGrad 4s ease-in-out infinite;
+    }
+    @keyframes shimmerGrad {
+      0%,100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .hero-sub {
+      font-size: 1.0625rem;
+      color: #5A6B5C;
+      line-height: 1.8;
+      margin-bottom: 40px;
+      max-width: 480px;
+    }
+
+    .hero-buttons { display: flex; gap: 14px; flex-wrap: wrap; }
+    .btn-glow {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 16px 32px; border-radius: 999px;
+      font-size: 0.9375rem; font-weight: 700;
+      background: linear-gradient(135deg, #2F6B3F, #52C97F);
+      color: #fff; border: none; cursor: pointer;
+      box-shadow: 0 0 40px rgba(82,201,127,0.3), 0 8px 24px rgba(47,107,63,0.4);
+      transition: all 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .btn-glow::before {
+      content: '';
+      position: absolute; top: 0; left: -100%; width: 200%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: btnShine 3s ease-in-out infinite;
+    }
+    @keyframes btnShine {
+      0%   { left: -100%; }
+      50%  { left: 100%; }
+      100% { left: 100%; }
+    }
+    .btn-glow:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 0 60px rgba(82,201,127,0.4), 0 12px 32px rgba(47,107,63,0.5); }
+
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 16px 28px; border-radius: 999px;
+      font-size: 0.9375rem; font-weight: 600;
+      color: #2F6B3F;
+      border: 1.5px solid rgba(47,107,63,0.25);
+      background: rgba(47,107,63,0.05);
+      cursor: pointer; transition: all 0.3s;
+    }
+    .btn-ghost:hover { border-color: rgba(47,107,63,0.5); color: #1A2B1C; background: rgba(47,107,63,0.1); }
+
+    /* Hero stats */
+    .hero-stats {
+      display: flex; gap: 40px;
+      margin-top: 56px; padding-top: 32px;
+      border-top: 1px solid rgba(47,107,63,0.12);
+    }
+    .h-stat-val {
+      font-size: 2rem; font-weight: 800;
+      color: #1A2B1C;
+      letter-spacing: -0.5px; line-height: 1;
+    }
+    .h-stat-lbl { font-size: 0.75rem; color: #8A9E8C; margin-top: 4px; }
+
+    /* Hero visual */
+    .hero-visual {
+      display: flex; justify-content: center; align-items: center;
+      perspective: 1000px;
+      position: relative;
+    }
+
+    /* 3D Phone mockup */
+    .phone-3d {
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.1s ease-out;
+    }
+    .phone-body {
+      width: 260px;
+      aspect-ratio: 9/19;
+      background: linear-gradient(160deg, #1A2B1C, #0F1F12);
+      border-radius: 36px;
+      border: 2px solid rgba(47,107,63,0.4);
+      box-shadow:
+        0 0 0 6px rgba(255,255,255,0.5),
+        0 40px 80px rgba(0,0,0,0.2),
+        0 0 80px rgba(82,201,127,0.08);
+      overflow: hidden;
+      position: relative;
+    }
+    .phone-notch {
+      position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+      width: 90px; height: 22px; border-radius: 999px;
+      background: #000;
+    }
+    .phone-ui {
+      width: 100%; height: 100%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; padding: 40px 16px 20px;
+    }
+    .phone-ui img { width: 50px; height: 50px; object-fit: contain; }
+    .phone-ui .brand { font-size: 8px; font-weight: 700; color: #52C97F; letter-spacing: 2px; }
+
+    .phone-mini-card {
+      width: 100%; background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px; padding: 12px; margin-top: 4px;
+    }
+    .phone-mini-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .phone-mini-row span:first-child { font-size: 8px; color: rgba(255,255,255,0.45); }
+    .phone-mini-row span:last-child { font-size: 8px; color: #52C97F; font-weight: 700; }
+    .phone-mini-metrics { display: flex; gap: 6px; }
+    .phone-mini-metric {
+      flex: 1; border-radius: 10px; padding: 8px; text-align: center;
+    }
+    .phone-mini-metric .v { font-size: 14px; font-weight: 800; line-height: 1; }
+    .phone-mini-metric .l { font-size: 6px; color: rgba(255,255,255,0.35); margin-top: 3px; }
+    .phone-progress {
+      margin-top: 8px; height: 3px; background: rgba(255,255,255,0.08);
+      border-radius: 99px; overflow: hidden;
+    }
+    .phone-progress-bar {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: linear-gradient(90deg, #52C97F, #2F6B3F);
+      animation: progressFill 2s 1.5s ease-out forwards;
+    }
+    @keyframes progressFill { to { width: 67%; } }
+    .phone-progress-label {
+      font-size: 6px; color: rgba(255,255,255,0.25);
+      text-align: center; margin-top: 4px;
+    }
+
+    /* Floating 3D cards */
+    .float-3d {
+      position: absolute;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(47,107,63,0.12);
+      border-radius: 16px;
+      padding: 12px 16px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      transform-style: preserve-3d;
+      white-space: nowrap;
+    }
+    .float-3d .ico {
+      width: 32px; height: 32px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .float-3d .val { font-weight: 800; font-size: 15px; color: #1A2B1C; }
+    .float-3d .lbl { font-size: 10px; color: #8A9E8C; }
+
+    .fc-1 { top: 40px; left: -90px; animation: floatY 4s ease-in-out infinite; }
+    .fc-2 { bottom: 80px; right: -80px; animation: floatY 5s ease-in-out infinite 1s; }
+    .fc-3 { top: 45%; left: -110px; animation: floatY 3.5s ease-in-out infinite 0.5s; }
+
+    @keyframes floatY {
+      0%,100% { transform: translateY(0) translateZ(20px); }
+      50% { transform: translateY(-14px) translateZ(30px); }
+    }
+
+    /* Glow ring */
+    .phone-ring {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 360px; height: 360px;
+      border: 1px solid rgba(82,201,127,0.15);
+      border-radius: 50%;
+      box-shadow: 0 0 80px rgba(82,201,127,0.08);
+      z-index: -1;
+      animation: ringPulse 4s ease-in-out infinite;
+    }
+    .phone-ring-2 {
+      width: 500px; height: 500px;
+      border-color: rgba(82,201,127,0.06);
+      animation-delay: 1s;
+    }
+    @keyframes ringPulse {
+      0%,100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+      50% { transform: translate(-50%,-50%) scale(1.05); opacity: 0.5; }
+    }
+
+    @media (max-width: 900px) {
+      .hero-inner { grid-template-columns: 1fr; text-align: center; }
+      .hero-sub { max-width: 100%; margin-left: auto; margin-right: auto; }
+      .hero-buttons { justify-content: center; }
+      .hero-stats { justify-content: center; }
+      .hero-visual { display: none; }
+    }
+
+    /* ═══ STATS MARQUEE ═══ */
+    .stats-strip {
+      background: linear-gradient(90deg, #1A3D20, #2F6B3F, #1A3D20);
+      padding: 24px 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .stats-track {
+      display: flex; gap: 80px;
+      animation: marquee 20s linear infinite;
+      width: max-content;
+    }
+    @keyframes marquee {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .s-item { display: flex; align-items: center; gap: 12px; white-space: nowrap; }
+    .s-item .num { font-size: 1.5rem; font-weight: 800; color: #fff; }
+    .s-item .txt { font-size: 0.8125rem; color: rgba(255,255,255,0.55); }
+    .s-item .sep { width: 4px; height: 4px; border-radius: 50%; background: rgba(255,255,255,0.2); }
+
+    /* ═══ FEATURES ═══ */
+    .section { padding: 120px 0; position: relative; }
+    .section-dark { background: #fff; }
+    .section-green { background: linear-gradient(180deg, #EBF5EE, #F5F7F5); }
+
+    .section-header { text-align: center; max-width: 640px; margin: 0 auto 72px; }
+    .section-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 16px; border-radius: 999px;
+      background: rgba(47,107,63,0.08);
+      border: 1px solid rgba(47,107,63,0.15);
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 1px;
+      color: #2F6B3F;
+      margin-bottom: 20px;
+    }
+    .section-header h2 {
+      font-family: 'Poppins', sans-serif;
+      font-size: clamp(1.75rem, 3.5vw, 2.8rem);
+      color: #1A2B1C;
+      font-weight: 800; letter-spacing: -1px; line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .section-header p { font-size: 1rem; color: #5A6B5C; line-height: 1.7; }
+
+    .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+
+    .feat-card {
+      background: #F5F7F5;
+      border: 1.5px solid rgba(47,107,63,0.08);
+      border-radius: 24px;
+      padding: 36px 28px;
+      transition: all 0.4s cubic-bezier(0.4,0,0.2,1);
+      cursor: default;
+      position: relative; overflow: hidden;
+    }
+    .feat-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .feat-card:hover::before { opacity: 1; }
+    .feat-card:hover {
+      background: #fff;
+      border-color: rgba(47,107,63,0.2);
+      transform: translateY(-6px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.08), 0 0 40px rgba(47,107,63,0.04);
+    }
+    .feat-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 22px;
+    }
+    .feat-card h3 { font-size: 1.0625rem; font-weight: 700; margin-bottom: 10px; color: #1A2B1C; }
+    .feat-card p { font-size: 0.875rem; color: #5A6B5C; line-height: 1.7; }
+
+    @media (max-width: 768px) {
+      .feat-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ═══ HOW IT WORKS ═══ */
+    .steps-row { display: flex; gap: 0; align-items: flex-start; position: relative; }
+    .steps-row::before {
+      content: '';
+      position: absolute;
+      top: 42px; left: 20%; right: 20%;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(47,107,63,0.1), rgba(47,107,63,0.35), rgba(47,107,63,0.1));
+    }
+    .step-item { flex: 1; text-align: center; padding: 0 16px; position: relative; }
+    .step-num {
+      width: 84px; height: 84px; border-radius: 50%;
+      background: linear-gradient(135deg, #2F6B3F, #52C97F);
+      color: #fff; font-size: 1.5rem; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 28px;
+      box-shadow: 0 0 32px rgba(47,107,63,0.2), 0 8px 24px rgba(47,107,63,0.3);
+      position: relative; z-index: 1;
+    }
+    .step-item h3 { font-size: 1rem; font-weight: 700; margin-bottom: 10px; color: #1A2B1C; }
+    .step-item p { font-size: 0.875rem; color: #5A6B5C; line-height: 1.6; max-width: 260px; margin: 0 auto; }
+
+    @media (max-width: 768px) {
+      .steps-row { flex-direction: column; gap: 40px; }
+      .steps-row::before { display: none; }
+    }
+
+    /* ═══ TESTIMONIALS ═══ */
+    .testi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .testi-card {
+      background: #fff;
+      border: 1.5px solid rgba(47,107,63,0.08);
+      border-radius: 24px; padding: 28px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+      transition: all 0.4s;
+    }
+    .testi-card:hover {
+      border-color: rgba(47,107,63,0.2);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.08);
+    }
+    .testi-stars { display: flex; gap: 2px; margin-bottom: 16px; }
+    .testi-text { font-size: 0.9375rem; color: #5A6B5C; line-height: 1.7; font-style: italic; margin-bottom: 20px; }
+    .testi-text::before { content: '"'; font-size: 2rem; color: #2F6B3F; line-height: 0; vertical-align: -0.5rem; margin-right: 4px; }
+    .testi-author { display: flex; align-items: center; gap: 12px; }
+    .testi-avatar {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: linear-gradient(135deg, #2F6B3F, #52C97F);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 800; font-size: 0.875rem; flex-shrink: 0;
+    }
+    .testi-name { font-weight: 700; font-size: 0.875rem; color: #1A2B1C; }
+    .testi-loc { font-size: 0.72rem; color: #8A9E8C; }
+
+    @media (max-width: 768px) { .testi-grid { grid-template-columns: 1fr; } }
+
+    /* ═══ SPECIES ═══ */
+    .species-row {
+      display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;
+    }
+    .species-pill {
+      text-align: center; padding: 28px 36px;
+      background: #fff;
+      border: 1.5px solid rgba(47,107,63,0.1);
+      border-radius: 24px; min-width: 140px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      transition: all 0.3s;
+    }
+    .species-pill:hover {
+      background: #EBF5EE;
+      border-color: rgba(47,107,63,0.3);
+      transform: translateY(-4px) scale(1.03);
+      box-shadow: 0 8px 24px rgba(47,107,63,0.12);
+    }
+    .species-pill .spc-icon {
+      width: 72px; height: 72px; border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 12px;
+    }
+    .species-pill .name { font-weight: 700; font-size: 0.95rem; color: #1A2B1C; }
+    .species-pill .info { font-size: 0.72rem; color: #8A9E8C; margin-top: 2px; }
+    .testi-loc { display: flex; align-items: center; gap: 4px; font-size: 0.72rem; color: #8A9E8C; }
+
+    /* ═══ CTA ═══ */
+    .cta-section {
+      padding: 120px 0;
+      background: linear-gradient(135deg, #2F6B3F 0%, #3D8A52 50%, #2F6B3F 100%);
+      position: relative; overflow: hidden;
+    }
+    .cta-section::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0%, transparent 60%);
+    }
+    .cta-inner { text-align: center; position: relative; z-index: 1; }
+    .cta-inner h2 {
+      font-family: 'Poppins', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 800; color: #fff; letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .cta-inner p { color: rgba(255,255,255,0.75); font-size: 1.0625rem; margin-bottom: 40px; max-width: 520px; margin-left: auto; margin-right: auto; }
+    .cta-buttons { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn-white {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 16px 32px; border-radius: 999px;
+      font-size: 0.9375rem; font-weight: 700;
+      background: #fff; color: #2F6B3F; border: none; cursor: pointer;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+      transition: all 0.3s;
+    }
+    .btn-white:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+    .btn-ghost-white {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 16px 28px; border-radius: 999px;
+      font-size: 0.9375rem; font-weight: 600;
+      color: rgba(255,255,255,0.85);
+      border: 1.5px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      cursor: pointer; transition: all 0.3s;
+    }
+    .btn-ghost-white:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.5); }
+
+    /* ═══ FOOTER ═══ */
+    .footer {
+      background: #1A2B1C;
+      padding: 64px 0 32px;
+    }
+    .footer-grid {
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 48px; margin-bottom: 48px;
+    }
+    .footer-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .footer-logo img { width: 30px; height: 30px; }
+    .footer-logo span { font-weight: 700; color: #fff; }
+    .footer-desc { font-size: 0.875rem; color: rgba(255,255,255,0.4); line-height: 1.7; }
+    .footer-col h4 { font-size: 0.75rem; font-weight: 700; color: rgba(255,255,255,0.5); letter-spacing: 0.8px; margin-bottom: 16px; }
+    .footer-col a { display: block; font-size: 0.875rem; color: rgba(255,255,255,0.4); margin-bottom: 10px; transition: color 0.2s; }
+    .footer-col a:hover { color: #52C97F; }
+    .footer-bottom {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 24px;
+      display: flex; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+    }
+    .footer-bottom p { font-size: 0.75rem; color: rgba(255,255,255,0.3); }
+
+    @media (max-width: 768px) {
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ═══ Custom cursor glow ═══ */
+    .cursor-glow {
+      position: fixed;
+      width: 300px; height: 300px;
+      background: radial-gradient(circle, rgba(47,107,63,0.07), transparent 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      transform: translate(-50%, -50%);
+      transition: opacity 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+<!-- 3D Canvas -->
+<canvas id="canvas3d"></canvas>
+
+<!-- Cursor glow -->
+<div class="cursor-glow" id="cursorGlow"></div>
+
+<!-- Scroll Content -->
+<div class="scroll-content">
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="container">
+      <div class="nav-inner">
+        <a href="#" class="nav-logo">
+          <img src="assets/logo-tetasco.png" alt="Logo" />
+          <span>Tetasco Connect</span>
+        </a>
+        <div class="nav-links">
+          <a href="#features">Fitur</a>
+          <a href="#how">Cara Kerja</a>
+          <a href="#testimonials">Testimoni</a>
+          <a href="dashboard.html">Dashboard</a>
+        </div>
+        <a href="#download" class="nav-cta">Download App</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero" id="home">
+    <div class="parallax-bg">
+      <div class="parallax-layer pl-glow-1" data-speed="0.3"></div>
+      <div class="parallax-layer pl-glow-2" data-speed="0.5"></div>
+      <div class="parallax-layer pl-grid" data-speed="0.1"></div>
+    </div>
+
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-content">
+          <div class="hero-tag" data-animate="fade">
+            <span class="pulse"></span>
+            IoT · Smart Farming · Indonesia
+          </div>
+
+          <h1 class="hero-title">
+            <span class="line"><span class="word">Penetas Telur</span></span>
+            <span class="line"><span class="word accent">Cerdas</span> <span class="word">di</span></span>
+            <span class="line"><span class="word">Genggaman Anda</span></span>
+          </h1>
+
+          <p class="hero-sub" data-animate="fade">
+            Tetasco Connect menghadirkan teknologi IoT ke tangan peternak Indonesia.
+            Monitor suhu, kelembaban, kontrol relay, dan lihat kamera inkubator
+            secara real-time dari mana saja.
+          </p>
+
+          <div class="hero-buttons" data-animate="fade">
+            <a href="#download" class="btn-glow">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 16l-6-6h4V4h4v6h4l-6 6z" fill="white"/><path d="M20 18H4v2h16v-2z" fill="white"/></svg>
+              Download di Android
+            </a>
+            <a href="#features" class="btn-ghost">
+              Pelajari Lebih
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </a>
+          </div>
+
+          <div class="hero-stats" data-animate="fade">
+            <div>
+              <div class="h-stat-val" data-count="2847">0</div>
+              <div class="h-stat-lbl">Peternak Aktif</div>
+            </div>
+            <div>
+              <div class="h-stat-val" data-count="142650">0</div>
+              <div class="h-stat-lbl">Telur Menetas</div>
+            </div>
+            <div>
+              <div class="h-stat-val" data-count="87" data-suffix="%">0</div>
+              <div class="h-stat-lbl">Keberhasilan</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone visual -->
+        <div class="hero-visual">
+          <div class="phone-3d" id="phone3d">
+            <div class="phone-ring"></div>
+            <div class="phone-ring phone-ring-2"></div>
+
+            <div class="float-3d fc-1">
+              <div class="ico" style="background:rgba(239,68,68,0.15);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M14 14.76V4.5a2.5 2.5 0 0 0-5 0v10.26A4 4 0 1 0 14 14.76Z" stroke="#ff7875" strokeWidth="1.8"/></svg>
+              </div>
+              <div>
+                <div class="val" style="color:#ff7875;">37.6°C</div>
+                <div class="lbl">Suhu Inkubator</div>
+              </div>
+            </div>
+
+            <div class="float-3d fc-2">
+              <div class="ico" style="background:rgba(59,130,246,0.15);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" stroke="#60A5FA" strokeWidth="1.8"/></svg>
+              </div>
+              <div>
+                <div class="val" style="color:#60A5FA;">68%</div>
+                <div class="lbl">Kelembaban</div>
+              </div>
+            </div>
+
+            <div class="float-3d fc-3">
+              <div class="ico" style="background:rgba(82,201,127,0.15);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" fill="#52C97F"/></svg>
+              </div>
+              <div>
+                <div class="val" style="color:#52C97F;">Normal</div>
+                <div class="lbl">Status Sistem</div>
+              </div>
+            </div>
+
+            <div class="phone-body">
+              <div class="phone-notch"></div>
+              <div class="phone-ui">
+                <img src="assets/logo-tetasco.png" alt="Logo" />
+                <div class="brand">TETASCO CONNECT</div>
+                <div class="phone-mini-card">
+                  <div class="phone-mini-row">
+                    <span>Inkubator Ayam #1</span>
+                    <span>● AKTIF</span>
+                  </div>
+                  <div class="phone-mini-metrics">
+                    <div class="phone-mini-metric" style="background:rgba(239,68,68,0.12);">
+                      <div class="v" style="color:#ff7875;">37.6°</div>
+                      <div class="l">Suhu</div>
+                    </div>
+                    <div class="phone-mini-metric" style="background:rgba(59,130,246,0.12);">
+                      <div class="v" style="color:#60A5FA;">68%</div>
+                      <div class="l">Lembab</div>
+                    </div>
+                    <div class="phone-mini-metric" style="background:rgba(82,201,127,0.12);">
+                      <div class="v" style="color:#52C97F;">14</div>
+                      <div class="l">Hari</div>
+                    </div>
+                  </div>
+                  <div class="phone-progress"><div class="phone-progress-bar"></div></div>
+                  <div class="phone-progress-label">Hari ke-14 dari 21</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS MARQUEE -->
+  <div class="stats-strip">
+    <div class="stats-track">
+      <div class="s-item"><span class="num">2.847+</span><span class="txt">Peternak Aktif</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">142.650</span><span class="txt">Telur Berhasil Menetas</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">34</span><span class="txt">Kota di Indonesia</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">87%</span><span class="txt">Tingkat Keberhasilan</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">4.9★</span><span class="txt">Rating Google Play</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">412</span><span class="txt">Inkubator Online</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <!-- Duplicate for seamless loop -->
+      <div class="s-item"><span class="num">2.847+</span><span class="txt">Peternak Aktif</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">142.650</span><span class="txt">Telur Berhasil Menetas</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">34</span><span class="txt">Kota di Indonesia</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">87%</span><span class="txt">Tingkat Keberhasilan</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">4.9★</span><span class="txt">Rating Google Play</span></div>
+      <div class="s-item"><span class="sep"></span></div>
+      <div class="s-item"><span class="num">412</span><span class="txt">Inkubator Online</span></div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="section section-dark" id="features">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">✦ FITUR UNGGULAN</div>
+        <h2>Semua yang Dibutuhkan<br/>Peternak <span style="color:#52C97F;">Modern</span></h2>
+        <p>Dari monitoring sensor hingga kontrol perangkat fisik — semua dalam satu aplikasi yang dirancang khusus untuk peternak Indonesia.</p>
+      </div>
+
+      <div class="feat-grid">
+        <div class="feat-card" style="--accent:#EF4444;">
+          <div class="feat-icon" style="background:rgba(239,68,68,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M14 14.76V4.5a2.5 2.5 0 0 0-5 0v10.26A4 4 0 1 0 14 14.76Z" stroke="#EF4444" strokeWidth="1.8"/></svg>
+          </div>
+          <h3>Monitoring Suhu & Kelembaban</h3>
+          <p>Pantau kondisi inkubator real-time dari sensor IoT. Notifikasi otomatis saat kondisi tidak ideal.</p>
+        </div>
+
+        <div class="feat-card" style="--accent:#52C97F;">
+          <div class="feat-icon" style="background:rgba(82,201,127,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="15" height="11" rx="2" stroke="#52C97F" strokeWidth="1.8"/><path d="M17 10l5-3v10l-5-3V10z" stroke="#52C97F" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+          </div>
+          <h3>Kamera Live Feed</h3>
+          <p>Lihat kondisi inkubator langsung melalui kamera yang terhubung ke Raspberry Pi 24/7.</p>
+        </div>
+
+        <div class="feat-card" style="--accent:#8B5CF6;">
+          <div class="feat-icon" style="background:rgba(139,92,246,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="2" y="3" width="20" height="14" rx="2" stroke="#8B5CF6" strokeWidth="1.8"/><path d="M8 21h8M12 17v4" stroke="#8B5CF6" strokeWidth="1.8" strokeLinecap="round"/></svg>
+          </div>
+          <h3>Kontrol Relay IoT</h3>
+          <p>Nyalakan dan matikan pemanas, kipas, pelembab, lampu UV dari smartphone kapan saja.</p>
+        </div>
+
+        <div class="feat-card" style="--accent:#F59E0B;">
+          <div class="feat-icon" style="background:rgba(245,158,11,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+          <h3>Notifikasi Cerdas</h3>
+          <p>Peringatan otomatis untuk suhu kritis, jadwal balik telur, dan fase menetas yang mendekat.</p>
+        </div>
+
+        <div class="feat-card" style="--accent:#3B82F6;">
+          <div class="feat-icon" style="background:rgba(59,130,246,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M3 3v18h18" stroke="#3B82F6" strokeWidth="1.8" strokeLinecap="round"/><path d="M18.4 8.4L10 16.8 6 12.8" stroke="#3B82F6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+          <h3>Riwayat & Analitik</h3>
+          <p>Rekam setiap sesi inkubasi, lihat tren keberhasilan, buat keputusan berbasis data.</p>
+        </div>
+
+        <div class="feat-card" style="--accent:#22C55E;">
+          <div class="feat-icon" style="background:rgba(34,197,94,0.1);">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="#22C55E" strokeWidth="1.8"/></svg>
+          </div>
+          <h3>Multi Jenis Telur</h3>
+          <p>Program inkubasi teroptimasi untuk ayam, puyuh, bebek, angsa, dan kalkun.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section section-green" id="how">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge"> CARA KERJA</div>
+        <h2>Mulai Hanya dalam <span style="color:#52C97F;">3 Langkah</span></h2>
+        <p>Tidak perlu keahlian teknis khusus. Tetasco Connect dirancang untuk semua peternak.</p>
+      </div>
+
+      <div class="steps-row">
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <h3>Pasang Perangkat IoT</h3>
+          <p>Hubungkan sensor suhu, kelembaban, dan relay ke Raspberry Pi dengan panduan mudah.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <h3>Download & Setup</h3>
+          <p>Install aplikasi, isi data peternakan, dan sambungkan ke perangkat IoT via WiFi.</p>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <h3>Monitor & Kontrol</h3>
+          <p>Inkubasi berjalan otomatis. Pantau, terima notifikasi, dan kontrol dari mana saja.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPECIES -->
+  <section class="section section-dark" id="species">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="13" rx="6" ry="8" stroke="#2F6B3F" strokeWidth="2"/><path d="M9 10 Q12 7 15 10" stroke="#2F6B3F" strokeWidth="1.5" strokeLinecap="round" fill="none"/></svg>
+          JENIS TELUR
+        </div>
+        <h2>Program untuk <span style="color:#52C97F;">5 Jenis</span> Telur</h2>
+      </div>
+      <div class="species-row">
+        <div class="species-pill">
+          <div class="spc-icon" style="background:rgba(217,119,6,0.1);">
+            <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <!-- Chicken -->
+              <ellipse cx="32" cy="38" rx="16" ry="14" fill="#D97706" opacity="0.8"/>
+              <circle cx="32" cy="20" r="10" fill="#D97706" opacity="0.9"/>
+              <path d="M26 14 Q24 8 28 10" stroke="#D97706" strokeWidth="2" fill="#EF4444" strokeLinecap="round"/>
+              <path d="M36 14 Q38 8 36 10" stroke="#D97706" strokeWidth="2" fill="#EF4444" strokeLinecap="round"/>
+              <ellipse cx="32" cy="27" rx="4" ry="2" fill="#FEF3C7"/>
+              <circle cx="29" cy="19" r="2" fill="#1A2B1C"/>
+              <circle cx="35" cy="19" r="2" fill="#1A2B1C"/>
+              <path d="M29 24 Q32 26 35 24" stroke="#EF4444" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              <path d="M22 40 L16 52 M42 40 L48 52" stroke="#D97706" strokeWidth="3" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div class="name">Ayam</div><div class="info">21 hari · 37.7°C</div>
+        </div>
+        <div class="species-pill">
+          <div class="spc-icon" style="background:rgba(139,92,246,0.1);">
+            <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <!-- Egg -->
+              <ellipse cx="32" cy="36" rx="14" ry="18" fill="#8B5CF6" opacity="0.85"/>
+              <ellipse cx="27" cy="30" rx="4" ry="6" fill="rgba(255,255,255,0.2)"/>
+              <path d="M26 28 Q32 24 38 28" stroke="rgba(255,255,255,0.3)" strokeWidth="1.5" fill="none"/>
+            </svg>
+          </div>
+          <div class="name">Puyuh</div><div class="info">17 hari · 37.8°C</div>
+        </div>
+        <div class="species-pill">
+          <div class="spc-icon" style="background:rgba(59,130,246,0.1);">
+            <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <!-- Duck -->
+              <ellipse cx="34" cy="40" rx="18" ry="13" fill="#3B82F6" opacity="0.85"/>
+              <circle cx="22" cy="26" r="10" fill="#3B82F6" opacity="0.9"/>
+              <path d="M14 28 Q8 26 10 30 Q12 34 18 32" fill="#F59E0B"/>
+              <circle cx="20" cy="23" r="2" fill="#1A2B1C"/>
+              <path d="M16 38 L10 52 M36 42 L40 54" stroke="#3B82F6" strokeWidth="3" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div class="name">Bebek</div><div class="info">28 hari · 37.5°C</div>
+        </div>
+        <div class="species-pill">
+          <div class="spc-icon" style="background:rgba(71,85,105,0.1);">
+            <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <!-- Goose (long neck) -->
+              <ellipse cx="36" cy="42" rx="18" ry="12" fill="#64748B" opacity="0.85"/>
+              <rect x="20" y="18" width="8" height="24" rx="4" fill="#64748B" opacity="0.9"/>
+              <circle cx="24" cy="14" r="8" fill="#64748B" opacity="0.95"/>
+              <path d="M20 14 Q16 12 16 16 Q18 20 22 18" fill="#F59E0B"/>
+              <circle cx="22" cy="12" r="2" fill="#1A2B1C"/>
+            </svg>
+          </div>
+          <div class="name">Angsa</div><div class="info">30 hari · 37.3°C</div>
+        </div>
+        <div class="species-pill">
+          <div class="spc-icon" style="background:rgba(120,53,15,0.1);">
+            <svg width="36" height="36" viewBox="0 0 64 64" fill="none">
+              <!-- Turkey -->
+              <ellipse cx="32" cy="42" rx="17" ry="13" fill="#92400E" opacity="0.85"/>
+              <circle cx="32" cy="24" r="11" fill="#92400E" opacity="0.9"/>
+              <path d="M20 16 Q18 8 24 12 M32 14 Q32 6 32 10 M44 16 Q46 8 40 12" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round"/>
+              <circle cx="29" cy="22" r="2" fill="#1A2B1C"/>
+              <circle cx="35" cy="22" r="2" fill="#1A2B1C"/>
+              <path d="M29 27 Q32 30 35 27" stroke="#DC2626" strokeWidth="2" fill="none"/>
+              <path d="M20 44 L14 54 M44 44 L50 54" stroke="#92400E" strokeWidth="3" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div class="name">Kalkun</div><div class="info">28 hari · 37.5°C</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="section section-green" id="testimonials">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-badge">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#2F6B3F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          TESTIMONI
+        </div>
+        <h2>Dipercaya <span style="color:#52C97F;">Ribuan</span> Peternak</h2>
+      </div>
+
+      <div class="testi-grid">
+        <div class="testi-card">
+          <div class="testi-stars">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testi-text">Tingkat penetasan naik dari 70% jadi 89% setelah pakai Tetasco Connect. Notifikasi suhu sangat membantu di malam hari.</p>
+          <div class="testi-author">
+            <div class="testi-avatar">BS</div>
+            <div>
+              <div class="testi-name">Budi Santoso</div>
+              <div class="testi-loc">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="#2F6B3F" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="#2F6B3F" strokeWidth="2"/></svg>
+                Peternak Ayam · Blitar, Jawa Timur
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="testi-card">
+          <div class="testi-stars">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testi-text">Sangat mudah digunakan. Saya bisa kontrol inkubator dari sawah sekalipun. Fitur kamera live-nya luar biasa!</p>
+          <div class="testi-author">
+            <div class="testi-avatar">SR</div>
+            <div>
+              <div class="testi-name">Siti Rahayu</div>
+              <div class="testi-loc">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="#2F6B3F" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="#2F6B3F" strokeWidth="2"/></svg>
+                Peternak Puyuh · Yogyakarta
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="testi-card">
+          <div class="testi-stars">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <p class="testi-text">Modal saya lebih aman karena bisa monitor 24 jam. Listrik mati langsung dapat notifikasi. 3 batch berhasil 90%+!</p>
+          <div class="testi-author">
+            <div class="testi-avatar">AH</div>
+            <div>
+              <div class="testi-name">Ahmad Hidayat</div>
+              <div class="testi-loc">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" stroke="#2F6B3F" strokeWidth="2"/><circle cx="12" cy="10" r="3" stroke="#2F6B3F" strokeWidth="2"/></svg>
+                Peternak Bebek · Brebes, Jawa Tengah
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section" id="download">
+    <div class="container">
+      <div class="cta-inner">
+        <div class="section-badge" style="margin-bottom:24px; background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.3); color:#fff;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="white"/></svg>
+          GRATIS · TANPA BIAYA LANGGANAN
+        </div>
+        <h2>Mulai Inkubasi Lebih<br/>Cerdas Hari Ini</h2>
+        <p>Bergabunglah dengan 2.847+ peternak yang sudah merasakan manfaat Tetasco Connect.</p>
+        <div class="cta-buttons">
+          <a href="#" class="btn-white" style="padding:18px 36px; font-size:1rem;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 16l-6-6h4V4h4v6h4l-6 6z" fill="#2F6B3F"/><path d="M20 18H4v2h16v-2z" fill="#2F6B3F"/></svg>
+            Download APK Android
+          </a>
+          <a href="dashboard.html" class="btn-ghost-white" style="padding:18px 32px;">
+            Lihat Dashboard
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div>
+          <div class="footer-logo">
+            <img src="assets/logo-tetasco.png" alt="Logo" />
+            <span>Tetasco Connect</span>
+          </div>
+          <p class="footer-desc">Platform IoT cerdas untuk peternak modern Indonesia. Monitor dan kontrol inkubator dari mana saja.</p>
+        </div>
+        <div class="footer-col">
+          <h4>PRODUK</h4>
+          <a href="#features">Fitur</a>
+          <a href="#how">Cara Kerja</a>
+          <a href="#download">Download</a>
+          <a href="dashboard.html">Dashboard</a>
+        </div>
+        <div class="footer-col">
+          <h4>JENIS TELUR</h4>
+          <a href="#">Ayam</a>
+          <a href="#">Puyuh</a>
+          <a href="#">Bebek</a>
+          <a href="#">Angsa & Kalkun</a>
+        </div>
+        <div class="footer-col">
+          <h4>PERUSAHAAN</h4>
+          <a href="#">Tentang Kami</a>
+          <a href="#">Kontak</a>
+          <a href="#">Kebijakan Privasi</a>
+          <a href="#">Syarat & Ketentuan</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p> 2026 Tetasco Connect. Dibuat dengan <svg width="13" height="13" viewBox="0 0 24 24" fill="#EF4444" style="display:inline;vertical-align:middle;"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> untuk peternak Indonesia.</p>
+        <p>v1.0.0 · Powered by Raspberry Pi IoT</p>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+// ═══ THREE.JS — 3D Floating Eggs & Particles ═══
+(function() {
+  const canvas = document.getElementById('canvas3d');
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.z = 30;
+
+  // Ambient light
+  scene.add(new THREE.AmbientLight(0x52C97F, 0.3));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.5);
+  dir.position.set(10, 10, 10);
+  scene.add(dir);
+  const point = new THREE.PointLight(0x52C97F, 0.8, 50);
+  point.position.set(-5, 5, 15);
+  scene.add(point);
+
+  // Create egg geometry (scaled sphere)
+  function makeEgg() {
+    const geo = new THREE.SphereGeometry(1, 16, 12);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i);
+      const scale = 1 - y * 0.12;
+      pos.setX(i, pos.getX(i) * scale);
+      pos.setZ(i, pos.getZ(i) * scale);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  const eggGeo = makeEgg();
+  const eggs = [];
+
+  for (let i = 0; i < 12; i++) {
+    const mat = new THREE.MeshPhongMaterial({
+      color: new THREE.Color().setHSL(0.35 + Math.random() * 0.1, 0.4, 0.3 + Math.random() * 0.3),
+      transparent: true,
+      opacity: 0.15 + Math.random() * 0.15,
+      shininess: 80,
+    });
+    const mesh = new THREE.Mesh(eggGeo, mat);
+    mesh.position.set(
+      (Math.random() - 0.5) * 50,
+      (Math.random() - 0.5) * 35,
+      (Math.random() - 0.5) * 20 - 5
+    );
+    mesh.scale.setScalar(0.4 + Math.random() * 0.8);
+    mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+    mesh.userData = {
+      baseY: mesh.position.y,
+      speed: 0.3 + Math.random() * 0.5,
+      rotSpeed: (Math.random() - 0.5) * 0.01,
+      amplitude: 1 + Math.random() * 2,
+    };
+    scene.add(mesh);
+    eggs.push(mesh);
+  }
+
+  // Particles
+  const partGeo = new THREE.BufferGeometry();
+  const partCount = 200;
+  const positions = new Float32Array(partCount * 3);
+  for (let i = 0; i < partCount * 3; i++) {
+    positions[i] = (Math.random() - 0.5) * 80;
+  }
+  partGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const partMat = new THREE.PointsMaterial({
+    size: 0.06,
+    color: 0x2F6B3F,
+    transparent: true,
+    opacity: 0.18,
+  });
+  const particles = new THREE.Points(partGeo, partMat);
+  scene.add(particles);
+
+  // Mouse tracking
+  let mouseX = 0, mouseY = 0;
+  document.addEventListener('mousemove', e => {
+    mouseX = (e.clientX / window.innerWidth - 0.5) * 2;
+    mouseY = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+
+  // Animation loop
+  let time = 0;
+  function animate() {
+    requestAnimationFrame(animate);
+    time += 0.01;
+
+    camera.position.x += (mouseX * 3 - camera.position.x) * 0.02;
+    camera.position.y += (-mouseY * 2 - camera.position.y) * 0.02;
+    camera.lookAt(0, 0, 0);
+
+    eggs.forEach(egg => {
+      egg.position.y = egg.userData.baseY + Math.sin(time * egg.userData.speed) * egg.userData.amplitude;
+      egg.rotation.y += egg.userData.rotSpeed;
+      egg.rotation.x += egg.userData.rotSpeed * 0.5;
+    });
+
+    particles.rotation.y += 0.0005;
+    particles.rotation.x += 0.0002;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+})();
+
+// ═══ GSAP SCROLL ANIMATIONS ═══
+gsap.registerPlugin(ScrollTrigger);
+
+// Hero text reveal
+gsap.to('.hero-title .word', {
+  y: 0, opacity: 1,
+  duration: 0.8,
+  stagger: 0.12,
+  ease: 'power3.out',
+  delay: 0.5,
+});
+
+// Hero fade elements
+gsap.from('[data-animate="fade"]', {
+  y: 30, opacity: 0,
+  duration: 0.8,
+  stagger: 0.2,
+  ease: 'power2.out',
+  delay: 1.2,
+});
+
+// Parallax layers on scroll
+document.querySelectorAll('.parallax-layer').forEach(layer => {
+  const speed = parseFloat(layer.dataset.speed) || 0.5;
+  gsap.to(layer, {
+    y: () => -window.innerHeight * speed * 0.5,
+    ease: 'none',
+    scrollTrigger: {
+      trigger: '.hero',
+      start: 'top top',
+      end: 'bottom top',
+      scrub: true,
+    },
+  });
+});
+
+// Feature cards
+gsap.utils.toArray('.feat-card').forEach((card, i) => {
+  gsap.from(card, {
+    y: 60, opacity: 0,
+    duration: 0.7,
+    delay: i * 0.1,
+    scrollTrigger: {
+      trigger: card,
+      start: 'top 85%',
+      toggleActions: 'play none none none',
+    },
+  });
+});
+
+// Steps
+gsap.utils.toArray('.step-item').forEach((step, i) => {
+  gsap.from(step, {
+    y: 50, opacity: 0,
+    duration: 0.7,
+    delay: i * 0.2,
+    scrollTrigger: {
+      trigger: step,
+      start: 'top 85%',
+    },
+  });
+});
+
+// Species pills
+gsap.utils.toArray('.species-pill').forEach((pill, i) => {
+  gsap.from(pill, {
+    y: 40, opacity: 0, scale: 0.9,
+    duration: 0.5,
+    delay: i * 0.1,
+    scrollTrigger: {
+      trigger: pill,
+      start: 'top 85%',
+    },
+  });
+});
+
+// Testi cards
+gsap.utils.toArray('.testi-card').forEach((card, i) => {
+  gsap.from(card, {
+    y: 50, opacity: 0,
+    duration: 0.7,
+    delay: i * 0.15,
+    scrollTrigger: {
+      trigger: card,
+      start: 'top 85%',
+    },
+  });
+});
+
+// CTA
+gsap.from('.cta-inner', {
+  y: 60, opacity: 0,
+  duration: 0.8,
+  scrollTrigger: { trigger: '.cta-section', start: 'top 75%' },
+});
+
+// ═══ 3D PHONE TILT ═══
+const phone3d = document.getElementById('phone3d');
+if (phone3d) {
+  document.addEventListener('mousemove', e => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+    phone3d.style.transform = `rotateY(${x * 12}deg) rotateX(${-y * 8}deg)`;
+  });
+}
+
+// ═══ NAVBAR SCROLL ═══
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// ═══ CURSOR GLOW ═══
+const cursorGlow = document.getElementById('cursorGlow');
+document.addEventListener('mousemove', e => {
+  cursorGlow.style.left = e.clientX + 'px';
+  cursorGlow.style.top = e.clientY + 'px';
+});
+
+// ═══ SMOOTH SCROLL ═══
+document.querySelectorAll('a[href^="#"]').forEach(a => {
+  a.addEventListener('click', e => {
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+});
+
+// ═══ COUNT UP ═══
+function animateCount(el, target, duration, suffix) {
+  const step = ts => {
+    if (!el._st) el._st = ts;
+    const p = Math.min((ts - el._st) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(eased * target).toLocaleString('id-ID') + (suffix || '');
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+const countObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !entry.target._counted) {
+      entry.target._counted = true;
+      const target = parseInt(entry.target.dataset.count);
+      const suffix = entry.target.dataset.suffix || '';
+      animateCount(entry.target, target, 2000, suffix);
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('[data-count]').forEach(el => countObserver.observe(el));
+</script>
+
+</body>
+</html>

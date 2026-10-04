@@ -1,0 +1,16 @@
+{
+  "appId": "com.ternaktelur.app",
+  "appName": "TernakTelur",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0,
+      "backgroundColor": "#FFFFFF",
+      "showSpinner": false
+    }
+  }
+}

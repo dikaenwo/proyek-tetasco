@@ -1,0 +1,16 @@
+import paramiko, sys, time
+sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+rp = paramiko.SSHClient()
+rp.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+rp.connect('192.168.1.27', 22, 'tetasco1', 'saumata1192', timeout=10)
+
+rp.exec_command('pkill -9 -f app.py 2>/dev/null')
+time.sleep(2)
+chan = rp.get_transport().open_session()
+chan.exec_command('cd /home/tetasco1/Penetas-Telur && nohup python3 backend/app.py >> /tmp/tetasco_backend.log 2>&1 &')
+time.sleep(1); chan.close()
+print('[OK] Restart — Raspi akan pakai LAN (url_idx=0)')
+time.sleep(10)
+i,o,e = rp.exec_command('grep -E "CamPush.*terhubung|CamPush.*Mencoba" /tmp/tetasco_backend.log | tail -3')
+print(o.read().decode().strip())
+rp.close()

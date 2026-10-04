@@ -1,0 +1,31 @@
+[Unit]
+Description=Tetasco Relay API + MQTT Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/tetasco-lemari
+ExecStart=/home/pi/tetasco-lemari/venv/bin/python relay_api_mqtt.py
+
+# ─── Konfigurasi (sesuaikan tiap Raspi) ──────────────────────────────────────
+Environment=DEVICE_ID=lemari-1
+Environment=MQTT_BROKER=mqtt.tetasco.my.id
+Environment=MQTT_PORT=443
+Environment=MQTT_TRANSPORT=websockets
+Environment=MQTT_USE_TLS=true
+Environment=MQTT_WEBSOCKET_PATH=/mqtt
+Environment=MQTT_USER=lemari-1
+Environment=MQTT_PASS=GANTI_PASSWORD_LEMARI_1
+Environment=FLASK_PORT=5001
+Environment=SENSOR_INTERVAL=10
+Environment=HEARTBEAT_INTERVAL=30
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
