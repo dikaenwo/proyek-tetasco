@@ -214,7 +214,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   manualModes: {},
-  setManualMode: (id, manual) => set((s) => ({ manualModes: { ...s.manualModes, [id]: manual } })),
+  setManualMode: (id, manual) => {
+    // 1. Update lokal state
+    set((s) => ({ manualModes: { ...s.manualModes, [id]: manual } }));
+    
+    // 2. Beri tahu backend
+    const { backendUrl, tetascoId } = get();
+    if (backendUrl && tetascoId > 0) {
+      fetch(`${backendUrl.replace(/\/$/, '')}/api/tetasco/${tetascoId}/auto-control/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !manual }), // Jika manual = true, auto_control = false
+      }).catch(() => { /* silent fail */ });
+    }
+  },
 
   sendDeviceCommand: async (incId, device, on) => {
     const { backendUrl, tetascoId, incubators, updateIoTData, _lastControlledAt } = get();
@@ -261,6 +274,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       localStorage.setItem(STORAGE_INCUBATORS_KEY, JSON.stringify(next));
       return { incubators: next };
     });
+
+    const { backendUrl, tetascoId } = get();
+    if (backendUrl && tetascoId > 0) {
+      fetch(`${backendUrl.replace(/\/$/, '')}/api/tetasco/${tetascoId}/auto-control/species`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ species: data.species }),
+      }).catch(() => {});
+    }
   },
   updateTurningSchedule: (id, patch) => set((s) => ({
     incubators: s.incubators.map((inc) => {

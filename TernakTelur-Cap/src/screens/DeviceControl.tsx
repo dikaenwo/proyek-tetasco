@@ -460,12 +460,15 @@ function TurningScheduleSheet({ incId, sched, onClose }: {
 
 /* ── Main Screen ─────────────────────────────────────── */
 export function DeviceControl() {
-  const { incubators, updateIoTData, backendUrl, tetascoId, sendDeviceCommand } = useAppStore();
+  const { incubators, updateIoTData, backendUrl, tetascoId, sendDeviceCommand, manualModes } = useAppStore();
   // Kirim ke backend jika backendUrl & tetascoId terkonfigurasi
   const hasBackend = !!backendUrl && tetascoId > 0;
   const active = incubators.filter(i => i.isActive);
   const [selectedId, setSelectedId] = useState<string>(active[0]?.id ?? '');
   const [showScheduleSheet, setShowScheduleSheet] = useState(false);
+
+  const inc = active.find(i => i.id === selectedId) ?? active[0];
+  const isManual = !!manualModes[inc?.id ?? ''];
 
   // Hide bottom nav when sheet is open
   useEffect(() => {
@@ -517,6 +520,12 @@ export function DeviceControl() {
   };
 
   const toggle = (field: keyof typeof inc.iotData) => {
+    // Jika sedang dalam mode otomatis (isManual == false), maka blok klik untuk 
+    // perangkat yang dikontrol otomatis (heaterOn, heater2On, fanOn, humidifierOn)
+    if (!isManual && (field === 'heaterOn' || field === 'heater2On' || field === 'fanOn' || field === 'humidifierOn')) {
+      return;
+    }
+
     const next = !inc.iotData[field];
     const device = DEVICE_MAP[field];
     if (device && hasBackend) {
