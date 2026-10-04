@@ -1,10 +1,95 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAppStore, TurningSchedule } from '../store/appStore';
 import type { DeviceName } from '../services/api';
+import { fetchMqttSensor } from '../services/api';
 import {
   IconFan, IconLightbulb, IconSpray, IconRotate, IconUVLight,
   IconEggFilled, IconAlertTriangle,
 } from '../components/Icons';
+
+// ─── Profil range otomatis per species (mirror dari auto_control.py) ──────────
+const SPECIES_PROFILES: Record<string, { tempMin: number; tempMax: number; humMin: number; humMax: number }> = {
+  ayam:   { tempMin: 37.5, tempMax: 38.3, humMin: 50, humMax: 60 },
+  puyuh:  { tempMin: 37.2, tempMax: 37.8, humMin: 45, humMax: 55 },
+  bebek:  { tempMin: 37.5, tempMax: 38.0, humMin: 55, humMax: 70 },
+  angsa:  { tempMin: 37.4, tempMax: 38.0, humMin: 55, humMax: 75 },
+  kalkun: { tempMin: 37.5, tempMax: 38.3, humMin: 55, humMax: 65 },
+};
+
+// ─── Hook: Auto Control Logic ─────────────────────────────────────────────────
+function useAutoControl(
+  enabled: boolean,
+  species: string,
+  baseUrl: string,
+  tetascoId: number,
+  sendCmd: (device: DeviceName, on: boolean) => void
+) {
+  const [autoState, setAutoState] = useState<{
+    heater: boolean; fan: boolean; humidifier: boolean;
+    temp: number | null; humidity: number | null; lastEval: string;
+  }>({ heater: false, fan: false, humidifier: false, temp: null, humidity: null, lastEval: '' });
+
+  const prevRef = useRef<{ heater: boolean | null; fan: boolean | null; humidifier: boolean | null }>({
+    heater: null, fan: null, humidifier: null,
+  });
+
+  const evaluate = useCallback(async () => {
+    if (!enabled || !baseUrl || tetascoId <= 0) return;
+    try {
+      const data = await fetchMqttSensor(baseUrl, tetascoId);
+      if (!data.online || data.temperature === null || data.humidity === null) return;
+
+      const temp = data.temperature;
+      const hum  = data.humidity ?? 0;
+      const prof = SPECIES_PROFILES[species] ?? SPECIES_PROFILES['ayam'];
+
+      // ── Heater logic ──────────────────────────────────────────────────────────
+      const wantHeater = temp < prof.tempMin;
+      const wantFan    = temp > prof.tempMax;
+      const wantHumid  = hum < prof.humMin;
+
+      const prev = prevRef.current;
+
+      // Publish hanya jika state berubah
+      if (wantHeater !== prev.heater) {
+        sendCmd('heater-1', wantHeater);
+        prev.heater = wantHeater;
+      }
+      if (wantFan !== prev.fan) {
+        sendCmd('fan', wantFan);
+        prev.fan = wantFan;
+      }
+      if (wantHumid !== prev.humidifier) {
+        sendCmd('humidifier', wantHumid);
+        prev.humidifier = wantHumid;
+      }
+
+      setAutoState({
+        heater: wantHeater, fan: wantFan, humidifier: wantHumid,
+        temp, humidity: hum,
+        lastEval: new Date().toLocaleTimeString('id-ID'),
+      });
+    } catch {
+      // silent fail — jaringan bisa putus
+    }
+  }, [enabled, species, baseUrl, tetascoId, sendCmd]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    evaluate();
+    const t = setInterval(evaluate, 10_000); // poll tiap 10 detik
+    return () => clearInterval(t);
+  }, [enabled, evaluate]);
+
+  // Reset prev saat mode dimatikan
+  useEffect(() => {
+    if (!enabled) {
+      prevRef.current = { heater: null, fan: null, humidifier: null };
+    }
+  }, [enabled]);
+
+  return autoState;
+}
 
 /* ── Toggle Switch ───────────────────────────────────── */
 function ToggleSwitch({ on, onChange, accent }: { on: boolean; onChange: () => void; accent: string }) {
@@ -461,11 +546,31 @@ function TurningScheduleSheet({ incId, sched, onClose }: {
 /* ── Main Screen ─────────────────────────────────────── */
 export function DeviceControl() {
   const { incubators, updateIoTData, backendUrl, tetascoId, sendDeviceCommand } = useAppStore();
-  // Kirim ke backend jika backendUrl & tetascoId terkonfigurasi
   const hasBackend = !!backendUrl && tetascoId > 0;
   const active = incubators.filter(i => i.isActive);
   const [selectedId, setSelectedId] = useState<string>(active[0]?.id ?? '');
   const [showScheduleSheet, setShowScheduleSheet] = useState(false);
+
+  // ── Mode Otomatis / Manual ────────────────────────────────────────────────
+  const [autoMode, setAutoMode] = useState(false);
+
+  const inc = active.find(i => i.id === selectedId) ?? active[0];
+  const species = (inc?.species ?? 'ayam').toLowerCase();
+  const prof = SPECIES_PROFILES[species] ?? SPECIES_PROFILES['ayam'];
+
+  // Stable sendCmd wrapper untuk useAutoControl
+  const sendCmdFn = useCallback((device: DeviceName, on: boolean) => {
+    if (hasBackend) sendDeviceCommand(inc?.id ?? '', device, on);
+  }, [hasBackend, sendDeviceCommand, inc?.id]);
+
+  // Auto control hook — hanya aktif saat autoMode ON
+  const autoState = useAutoControl(
+    autoMode && hasBackend,
+    species,
+    backendUrl ?? '',
+    tetascoId,
+    sendCmdFn,
+  );
 
   // Hide bottom nav when sheet is open
   useEffect(() => {
@@ -476,8 +581,6 @@ export function DeviceControl() {
     }
     return () => document.body.removeAttribute('data-sheet-open');
   }, [showScheduleSheet]);
-
-  const inc = active.find(i => i.id === selectedId) ?? active[0];
 
   if (!inc) {
     return (
@@ -517,14 +620,13 @@ export function DeviceControl() {
   };
 
   const toggle = (field: keyof typeof inc.iotData) => {
+    // Blok toggle di auto mode untuk aktuator yang dikontrol otomatis
+    if (autoMode && (field === 'heaterOn' || field === 'fanOn' || field === 'humidifierOn')) return;
     const next = !inc.iotData[field];
     const device = DEVICE_MAP[field];
     if (device && hasBackend) {
-      // Selalu kirim ke backend (optimistic update + real HTTP call)
-      // sendDeviceCommand akan revert jika gagal
       sendDeviceCommand(inc.id, device, next);
     } else {
-      // Mode simulasi / belum konfigurasi backend — update lokal saja
       updateIoTData(inc.id, { [field]: next });
     }
   };
@@ -599,7 +701,136 @@ export function DeviceControl() {
           </span>
         </div>
 
-        {/* Pemanas */}
+        {/* ── Auto / Manual Mode Toggle ─────────────────────────────────── */}
+        <div style={{
+          background: autoMode
+            ? 'linear-gradient(135deg, rgba(47,107,63,0.08), rgba(82,201,127,0.05))'
+            : '#FFFFFF',
+          border: `1.5px solid ${autoMode ? 'rgba(47,107,63,0.25)' : 'rgba(0,0,0,0.06)'}`,
+          borderRadius: 18, padding: '14px 16px',
+          boxShadow: autoMode ? '0 4px 16px rgba(47,107,63,0.12)' : '0 1px 4px rgba(0,0,0,0.04)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Icon */}
+            <div style={{
+              width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+              background: autoMode ? 'rgba(47,107,63,0.12)' : '#F5F5F5',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.2s',
+            }}>
+              {autoMode ? (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="3" stroke="#2F6B3F" strokeWidth="2"/>
+                  <path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#2F6B3F" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="11" width="18" height="11" rx="2" stroke="#9CA3AF" strokeWidth="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              )}
+            </div>
+            {/* Label */}
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 14, fontWeight: 700, color: autoMode ? '#1A2B1C' : '#6B7280' }}>
+                {autoMode ? 'Mode Otomatis Aktif' : 'Mode Manual'}
+              </p>
+              <p style={{ fontSize: 11, color: '#8A9E8C', marginTop: 2 }}>
+                {autoMode
+                  ? `Range: ${prof.tempMin}–${prof.tempMax}°C · ${prof.humMin}–${prof.humMax}% · Profil: ${species}`
+                  : 'Kontrol semua aktuator secara manual'
+                }
+              </p>
+            </div>
+            {/* Toggle */}
+            <ToggleSwitch on={autoMode} onChange={() => setAutoMode(v => !v)} accent="#2F6B3F" />
+          </div>
+
+          {/* ── Panel Status Auto (hanya saat auto ON) ── */}
+          {autoMode && (
+            <div style={{
+              marginTop: 12, paddingTop: 12,
+              borderTop: '1px solid rgba(47,107,63,0.12)',
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8,
+            }}>
+              {/* Suhu aktual */}
+              <div style={{
+                background: '#FFFFFF', borderRadius: 12, padding: '10px 8px',
+                border: autoState.temp !== null && (autoState.temp < prof.tempMin || autoState.temp > prof.tempMax)
+                  ? '1.5px solid rgba(239,68,68,0.35)'
+                  : '1.5px solid rgba(47,107,63,0.15)',
+                textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 10, color: '#8A9E8C', fontWeight: 600 }}>SUHU</p>
+                <p style={{
+                  fontSize: 18, fontWeight: 800, lineHeight: 1.2,
+                  color: autoState.temp !== null && (autoState.temp < prof.tempMin || autoState.temp > prof.tempMax)
+                    ? '#EF4444' : '#2F6B3F',
+                }}>
+                  {autoState.temp !== null ? `${autoState.temp.toFixed(1)}°` : '–'}
+                </p>
+                <p style={{ fontSize: 9, color: '#8A9E8C' }}>{prof.tempMin}–{prof.tempMax}°C</p>
+              </div>
+              {/* Kelembaban aktual */}
+              <div style={{
+                background: '#FFFFFF', borderRadius: 12, padding: '10px 8px',
+                border: autoState.humidity !== null && (autoState.humidity < prof.humMin || autoState.humidity > prof.humMax)
+                  ? '1.5px solid rgba(239,68,68,0.35)'
+                  : '1.5px solid rgba(59,130,246,0.2)',
+                textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 10, color: '#8A9E8C', fontWeight: 600 }}>KELEMBABAN</p>
+                <p style={{
+                  fontSize: 18, fontWeight: 800, lineHeight: 1.2,
+                  color: autoState.humidity !== null && (autoState.humidity < prof.humMin || autoState.humidity > prof.humMax)
+                    ? '#EF4444' : '#3B82F6',
+                }}>
+                  {autoState.humidity !== null ? `${autoState.humidity.toFixed(0)}%` : '–'}
+                </p>
+                <p style={{ fontSize: 9, color: '#8A9E8C' }}>{prof.humMin}–{prof.humMax}%</p>
+              </div>
+              {/* Aksi terakhir */}
+              <div style={{
+                background: '#FFFFFF', borderRadius: 12, padding: '10px 8px',
+                border: '1.5px solid rgba(0,0,0,0.06)',
+                textAlign: 'center',
+              }}>
+                <p style={{ fontSize: 10, color: '#8A9E8C', fontWeight: 600 }}>TERAKHIR</p>
+                <p style={{ fontSize: 13, fontWeight: 700, color: '#1A2B1C', lineHeight: 1.3 }}>
+                  {autoState.lastEval || '...'}
+                </p>
+                <p style={{ fontSize: 9, color: '#8A9E8C' }}>update sensor</p>
+              </div>
+            </div>
+          )}
+
+          {/* Indikator aktuator dikontrol otomatis */}
+          {autoMode && (
+            <div style={{
+              marginTop: 10,
+              display: 'flex', gap: 6, flexWrap: 'wrap',
+            }}>
+              {[
+                { label: 'Pemanas', active: autoState.heater, color: '#F59E0B' },
+                { label: 'Kipas',   active: autoState.fan,    color: '#10B981' },
+                { label: 'Pelembab', active: autoState.humidifier, color: '#3B82F6' },
+              ].map(a => (
+                <div key={a.label} style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '4px 10px', borderRadius: 999,
+                  background: a.active ? `${a.color}15` : '#F3F4F6',
+                  border: `1px solid ${a.active ? `${a.color}35` : '#E5E7EB'}`,
+                  fontSize: 11, fontWeight: 700,
+                  color: a.active ? a.color : '#9CA3AF',
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: a.active ? a.color : '#D1D5DB' }} />
+                  {a.label}: {a.active ? 'ON' : 'OFF'}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <SectionHeader title="Pemanas" color="#F59E0B" />
         <DeviceRow
           icon={<IconLightbulb size={24} color={inc.iotData.heaterOn ? '#F59E0B' : '#9CA3AF'} />}
