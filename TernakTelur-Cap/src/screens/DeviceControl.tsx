@@ -480,8 +480,6 @@ export function DeviceControl() {
     return () => document.body.removeAttribute('data-sheet-open');
   }, [showScheduleSheet]);
 
-  const inc = active.find(i => i.id === selectedId) ?? active[0];
-
   if (!inc) {
     return (
       <div className="screen anim-fade-in">
