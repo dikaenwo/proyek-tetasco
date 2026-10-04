@@ -22,6 +22,9 @@ from pydantic import BaseModel
 # Import MQTT manager
 from mqtt_manager import mqtt_manager
 
+# Import Auto Control Engine
+from auto_control import auto_control, SPECIES_PROFILES
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -41,10 +44,25 @@ def handle_status(device_id: str, payload: dict):
 
 
 def handle_sensor(device_id: str, payload: dict):
-    """Simpan data sensor ke cache dan PostgreSQL."""
+    """Simpan data sensor ke cache, lalu jalankan auto control."""
     device_sensor_cache[device_id] = payload
-    logger.info(f"[Sensor] {device_id}: temp={payload.get('temperature')} hum={payload.get('humidity')}")
-    # TODO: db.execute("INSERT INTO sensor_history ...") pakai asyncpg/sqlalchemy
+    temp     = payload.get('temperature')
+    humidity = payload.get('humidity')
+    logger.info(f"[Sensor] {device_id}: temp={temp} hum={humidity}")
+
+    # ── Auto Control: evaluasi dan kirim perintah aktuator jika perlu ──────────
+    if temp is not None and humidity is not None:
+        try:
+            result = auto_control.evaluate(
+                device_id=device_id,
+                temp=float(temp),
+                humidity=float(humidity),
+                publish_fn=mqtt_manager.publish_command,
+            )
+            if result.get('auto_mode') and result.get('actions'):
+                logger.info(f"[AutoControl] {device_id} actions: {result['actions']}")
+        except Exception as e:
+            logger.error(f"[AutoControl] Error saat evaluate {device_id}: {e}")
 
 
 def handle_heartbeat(device_id: str, payload: dict):
@@ -212,4 +230,87 @@ def get_all_status():
         "devices":    device_status_cache,
         "sensors":    device_sensor_cache,
         "heartbeats": device_heartbeat_cache,
+    }
+
+
+# ─── Endpoints Auto Control ───────────────────────────────────────────────────
+class AutoModeRequest(BaseModel):
+    enabled: bool
+
+class SpeciesRequest(BaseModel):
+    species: str  # ayam | puyuh | bebek | angsa | kalkun
+
+
+@app.get("/api/auto-control/profiles")
+def list_profiles():
+    """Tampilkan semua profil jenis telur yang tersedia."""
+    return {
+        name: {
+            "name": p.name,
+            "temp_min": p.temp_min,
+            "temp_max": p.temp_max,
+            "hum_min":  p.hum_min,
+            "hum_max":  p.hum_max,
+            "incubation_days": p.incubation_days,
+        }
+        for name, p in SPECIES_PROFILES.items()
+    }
+
+
+@app.get("/api/tetasco/{tetasco_id}/auto-control")
+def get_auto_control_status(tetasco_id: int):
+    """Lihat status auto control lemari (mode, species, profil, state aktuator)."""
+    device_id = device_id_from_tetasco_id(tetasco_id)
+    return auto_control.get_status(device_id)
+
+
+@app.get("/api/auto-control/all")
+def get_all_auto_control():
+    """Status auto control semua lemari."""
+    return auto_control.get_all_status()
+
+
+@app.post("/api/tetasco/{tetasco_id}/auto-control/mode")
+def set_auto_mode(tetasco_id: int, body: AutoModeRequest):
+    """
+    Enable atau disable auto control untuk satu lemari.
+    Jika disabled, user bisa kontrol manual via endpoint /devices/{actuator}/{action}.
+    """
+    device_id = device_id_from_tetasco_id(tetasco_id)
+    auto_control.set_auto_mode(device_id, body.enabled)
+    return {
+        "success": True,
+        "device_id": device_id,
+        "auto_mode": body.enabled,
+        "message": f"Auto control {'AKTIF' if body.enabled else 'NONAKTIF (mode manual)'} untuk {device_id}",
+    }
+
+
+@app.post("/api/tetasco/{tetasco_id}/auto-control/species")
+def set_species(tetasco_id: int, body: SpeciesRequest):
+    """
+    Atur jenis telur untuk lemari tertentu.
+    Species: ayam | puyuh | bebek | angsa | kalkun
+    Profil suhu dan kelembaban akan otomatis menyesuaikan.
+    """
+    device_id = device_id_from_tetasco_id(tetasco_id)
+    species   = body.species.lower()
+    if species not in SPECIES_PROFILES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Species tidak valid: '{species}'. Pilihan: {list(SPECIES_PROFILES.keys())}"
+        )
+    auto_control.set_species(device_id, species)
+    profile = SPECIES_PROFILES[species]
+    return {
+        "success": True,
+        "device_id": device_id,
+        "species": species,
+        "profile": {
+            "temp_min": profile.temp_min,
+            "temp_max": profile.temp_max,
+            "hum_min":  profile.hum_min,
+            "hum_max":  profile.hum_max,
+        },
+        "message": f"Lemari {device_id} diset ke profil {profile.name}",
     }
